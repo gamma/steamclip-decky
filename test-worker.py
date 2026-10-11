@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as d:
         return real([sys.executable, '-c', code], **kwargs)
 
     w.subprocess.Popen = fake
-    w.transfer(f, 'test', 'iphone-15-pro')
+    w.transfer(f, 'test', 'test-target')
     p = json.loads(w.STATUS.read_text())
     assert p['stage'] == 'done' and p['percent'] == 100, p
     print('worker progress parser: OK')
