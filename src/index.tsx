@@ -1,5 +1,5 @@
 import { ButtonItem, Dropdown, PanelSection, PanelSectionRow, staticClasses } from '@decky/ui';
-import { callable, definePlugin, openFilePicker } from '@decky/api';
+import { callable, definePlugin } from '@decky/api';
 import { useEffect, useState } from 'react';
 import { FaVideo } from 'react-icons/fa';
 
@@ -12,14 +12,12 @@ const getConfig = callable<[], Config>('get_config');
 const setTarget = callable<[name: string], { target: string }>('set_target');
 const getProgress = callable<[], Progress>('get_progress');
 const sendClip = callable<[clipId: string], Progress>('send_clip');
-const sendFile = callable<[filePath: string], Progress>('send_file');
 
 function Content() {
   const [clips, setClips] = useState<Clip[]>([]);
   const [targets, setTargets] = useState<Target[]>([]);
   const [target, setTargetName] = useState('');
   const [selected, setSelected] = useState('');
-  const [filePath, setFilePath] = useState('');
   const [progress, setProgress] = useState<Progress>({ stage: 'idle', percent: 0, message: 'Bereit' });
   const [error, setError] = useState('');
 
@@ -56,22 +54,9 @@ function Content() {
     catch (e) { setError(String(e)); }
   };
   const sendClipSel = async () => {
-    if (!selected || busy) return;
+    if (!selected || !target || busy) return;
     try { setError(''); setProgress(await sendClip(selected)); }
     catch (e) { setError(String(e)); }
-  };
-  const pickAndSend = async () => {
-    if (busy) return;
-    try {
-      setError('');
-      const picked = await openFilePicker(0, '/home/deck/Videos', true, true, undefined, ['mp4'], false, false);
-      const chosen = (picked as any).realpath || (picked as any).path || '';
-      if (!chosen) return;
-      setFilePath(chosen);
-      setProgress(await sendFile(chosen));
-    } catch (e) {
-      if (String(e).indexOf('User canceled') < 0) setError(String(e));
-    }
   };
   const value = Math.min(100, Math.max(0, progress.percent || 0));
   return <PanelSection title="Steam-Clip ans iPhone">
@@ -96,8 +81,7 @@ function Content() {
       />
     </PanelSectionRow>
     <PanelSectionRow><ButtonItem layout="below" onClick={() => void refresh()} disabled={busy}>Dateiliste aktualisieren</ButtonItem></PanelSectionRow>
-    <PanelSectionRow><ButtonItem layout="below" onClick={() => void sendClipSel()} disabled={!selected || busy}>Auswahl als MP4 senden</ButtonItem></PanelSectionRow>
-    <PanelSectionRow><ButtonItem layout="below" onClick={() => void pickAndSend()} disabled={busy}>{filePath ? filePath.split('/').pop() : 'MP4-Datei auswählen & senden'}</ButtonItem></PanelSectionRow>
+    <PanelSectionRow><ButtonItem layout="below" onClick={() => void sendClipSel()} disabled={!selected || !target || busy}>Clip als MP4 senden</ButtonItem></PanelSectionRow>
     <PanelSectionRow>
       <div style={{ width: '100%', fontSize: 'small' }}>
         <div>{progress.file || ''}</div>
@@ -105,8 +89,9 @@ function Content() {
           <div style={{ width: `${value}%`, background: progress.stage === 'error' ? '#cf5656' : '#69a9ea', height: '100%', transition: 'width .5s' }} />
         </div>
         <div style={{ marginTop: 5 }}>{progress.message} {progress.stage === 'sending' ? `(${value.toFixed(1)} %)` : ''}</div>
-        {error && <div style={{ color: '#e27b7b' }}>{error}</div>}
+        {!target && <div style={{ color: '#e0b25a' }}>Bitte zuerst ein Zielgerät wählen.</div>}
         {!clips.length && <div>Kein gespeicherter Clip gefunden. In Steam zuerst einen Clip speichern.</div>}
+        {error && <div style={{ color: '#e27b7b' }}>{error}</div>}
       </div>
     </PanelSectionRow>
   </PanelSection>;

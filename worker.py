@@ -84,7 +84,7 @@ def transfer(path, job, target):
 def main():
     source = Path(sys.argv[1])
     kind, job = sys.argv[2:4]
-    target = sys.argv[4] if len(sys.argv) > 4 else 'iphone-15-pro'
+    target = sys.argv[4] if len(sys.argv) > 4 else ''
     BASE.mkdir(parents=True, exist_ok=True)
     with (BASE / 'worker.lock').open('w') as lock:
         try:

@@ -12,7 +12,6 @@ Tailscale-Gerät senden** – direkt aus dem Gaming-Modus über die ⋯-Sidebar.
 - **Echter Fortschritt**: Prozent + ETA, ausgelesen aus `tailscale file cp`.
 - **Verlustfreies MP4**: Steam-Clips werden per `ffmpeg -c copy` remuxt
   (keine Neukodierung), MP4-Dateien werden unverändert gesendet.
-- **„MP4-Datei auswählen & senden“**: beliebige MP4 über den Decky-Dateibrowser.
 
 ## Aufbau
 

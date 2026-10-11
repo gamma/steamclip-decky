@@ -12,7 +12,7 @@ STATE_DIR = HOME / '.local/state/steamclip-taildrop'
 STATE = STATE_DIR / 'progress.json'
 CONFIG = STATE_DIR / 'config.json'
 WORKER = HOME / '.local/bin/steamclip-worker.py'
-DEFAULT_TARGET = 'iphone-15-pro'
+DEFAULT_TARGET = ''
 
 
 def _human_size(n):
@@ -141,6 +141,8 @@ class Plugin:
         if current.get('stage') in ('queued', 'converting', 'sending') and time.time() - current.get('updated', 0) < 120:
             raise RuntimeError('Ein Versand läuft bereits.')
         target = _load_config().get('target', DEFAULT_TARGET)
+        if not target:
+            raise ValueError('Kein Zielgerät ausgewählt.')
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         job = str(time.time_ns())
         initial = {'job': job, 'stage': 'queued', 'percent': 0,
