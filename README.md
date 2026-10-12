@@ -1,4 +1,4 @@
-# SteamClip ans iPhone
+# SteamClip
 
 Decky-Loader-Plugin für das Steam Deck: **Steam-Clips als MP4 an ein beliebiges
 Tailscale-Gerät senden** – direkt aus dem Gaming-Modus über die ⋯-Sidebar.

@@ -78,7 +78,7 @@ def transfer(path, job, target):
         code = proc.wait(timeout=5)
         if code:
             raise RuntimeError(f'Taildrop meldet Fehler {code}; Details in transfer.log.')
-    update(job, 'done', 100, 'MP4 ans iPhone gesendet', file=path.name, size=size)
+    update(job, 'done', 100, f'MP4 an {target} gesendet', file=path.name, size=size)
 
 
 def main():

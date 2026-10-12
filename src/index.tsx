@@ -59,7 +59,7 @@ function Content() {
     catch (e) { setError(String(e)); }
   };
   const value = Math.min(100, Math.max(0, progress.percent || 0));
-  return <PanelSection title="Steam-Clip ans iPhone">
+  return <PanelSection title="SteamClip">
     <PanelSectionRow>
       <Dropdown
         menuLabel="Zielgerät wählen"
@@ -97,8 +97,8 @@ function Content() {
   </PanelSection>;
 }
 export default definePlugin(() => ({
-  name: 'SteamClip ans iPhone',
-  titleView: <div className={staticClasses.Title}>SteamClip ans iPhone</div>,
+  name: 'SteamClip',
+  titleView: <div className={staticClasses.Title}>SteamClip</div>,
   content: <Content />,
   icon: <FaVideo />,
 }));

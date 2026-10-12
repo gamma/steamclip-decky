@@ -35,5 +35,5 @@ globalThis.window = {
 const code = readFileSync(new URL('./dist/index.js', import.meta.url), 'utf8');
 const imported = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 const plugin = imported.default();
-if (plugin.name !== 'SteamClip ans iPhone') throw new Error('invalid plugin');
+if (plugin.name !== 'SteamClip') throw new Error('invalid plugin');
 console.log('frontend module valid:', plugin.name);

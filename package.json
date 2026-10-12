@@ -1,6 +1,6 @@
 {
   "name": "steamclip-decky",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "type": "module",
   "description": "Decky-Plugin: Steam-Clips als MP4 an ein Tailscale-Gerät senden (Dateiauswahl, Zielgerät-Auswahl mit Online-Status, Fortschritt).",
   "license": "MIT",
