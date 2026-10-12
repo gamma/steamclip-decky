@@ -15,5 +15,13 @@
   "devDependencies": {
     "@decky/ui": "^4.11.0",
     "esbuild": "^0.28.2"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "ignoreMissing": [
+        "react",
+        "react-dom"
+      ]
+    }
   }
 }

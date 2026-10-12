@@ -1,6 +1,11 @@
 {
   "name": "SteamClip ans iPhone",
-  "author": "Local",
+  "author": "Gerry Weißbach",
   "flags": [],
-  "api_version": 1
+  "api_version": 1,
+  "publish": {
+    "tags": ["tailscale", "video", "clips", "sharing", "transfer"],
+    "description": "Send Steam game recordings as MP4 to a Tailscale device from Game Mode: pick a clip (with file sizes) and a target device (with online status), watch real transfer progress.",
+    "image": "https://opengraph.githubassets.com/1/gamma/steamclip-decky"
+  }
 }
