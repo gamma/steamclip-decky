@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory() as temp:
     with patch.object(mod, '_tailscale_binary', return_value=None):
         config = asyncio.run(plugin.get_config())
         assert config['targets'] == []
-        assert 'not installed' in config['diagnostic']
+        assert config['diagnostic_code'] == 'tailscaleMissing'
 
     output = '100.1.2.3\ttarget-online\n100.1.2.4\ttarget-offline\toffline; last seen 5m ago\n'
     with patch.object(mod, '_tailscale_binary', return_value='/usr/bin/tailscale'), patch.object(mod.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=output, stderr='')):
@@ -32,6 +32,10 @@ with tempfile.TemporaryDirectory() as temp:
         assert [t['online'] for t in config['targets']] == [True, False]
         asyncio.run(plugin.set_target('target-online'))
         assert asyncio.run(plugin.get_config())['target'] == 'target-online'
+        asyncio.run(plugin.set_locale('de'))
+        assert asyncio.run(plugin.get_config())['locale'] == 'de'
+        asyncio.run(plugin.set_locale('en'))
+        assert asyncio.run(plugin.get_config())['locale'] == 'en'
         try:
             asyncio.run(plugin.set_target('made-up'))
         except ValueError:

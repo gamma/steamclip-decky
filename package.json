@@ -1,12 +1,12 @@
 {
   "name": "steamclip-decky",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "type": "module",
   "description": "Decky-Plugin: Steam-Clips als MP4 an ein Tailscale-Gerät senden (Dateiauswahl, Zielgerät-Auswahl mit Online-Status, Fortschritt).",
   "license": "MIT",
   "scripts": {
     "build": "esbuild src/index.tsx --bundle --format=esm --platform=browser --target=es2020 --jsx=automatic --alias:@decky/ui=./shims/ui.js --alias:@decky/manifest=./shims/manifest.json --alias:react=./shims/react.js --alias:react/jsx-runtime=./shims/jsx.js --outfile=dist/index.js --minify",
-    "smoke": "node test-import.mjs"
+    "smoke": "node test-import.mjs && node test-i18n.mjs"
   },
   "dependencies": {
     "@decky/api": "^1.1.3",

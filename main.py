@@ -44,14 +44,14 @@ def _dir_size(path):
 def _targets():
     binary = _tailscale_binary()
     if not binary:
-        return [], 'Tailscale is not installed. Install Tailscale on the Deck, log in and enable Taildrop on the tailnet.'
+        return [], 'tailscaleMissing', ''
     try:
         proc = subprocess.run([binary, 'file', 'cp', '--targets'],
                               capture_output=True, text=True, timeout=15)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return [], f'Tailscale is unavailable: {exc}'
+        return [], 'tailscaleUnavailable', str(exc)[:250]
     if proc.returncode:
-        return [], f'Taildrop unavailable: {(proc.stderr or proc.stdout).strip()[:250]}'
+        return [], 'taildropUnavailable', (proc.stderr or proc.stdout).strip()[:250]
     result = []
     for line in proc.stdout.splitlines():
         parts = line.split('\t')
@@ -64,7 +64,7 @@ def _targets():
         online = detail == ''
         result.append({'name': name, 'online': online, 'detail': detail})
     result.sort(key=lambda x: (not x['online'], x['name'].lower()))
-    return result, ''
+    return result, '', ''
 
 
 def _load_config():
@@ -113,13 +113,26 @@ class Plugin:
 
     async def get_config(self):
         cfg = _load_config()
-        targets, diagnostic = _targets()
+        targets, diagnostic_code, diagnostic_detail = _targets()
         target = cfg.get('target', DEFAULT_TARGET)
-        return {'target': target, 'targets': targets, 'diagnostic': diagnostic or ('No Taildrop targets available. Both devices must run Tailscale, use the same user, and Taildrop must be enabled.' if not targets else '')}
+        return {'target': target, 'locale': cfg.get('locale', ''), 'targets': targets,
+                'diagnostic_code': diagnostic_code or ('noTargets' if not targets else ''),
+                'diagnostic_detail': diagnostic_detail}
+
+    async def set_locale(self, locale: str):
+        if locale not in ('de', 'en'):
+            raise ValueError('invalidLocale')
+        cfg = _load_config()
+        cfg['locale'] = locale
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = CONFIG.with_suffix('.tmp')
+        tmp.write_text(json.dumps(cfg, ensure_ascii=False))
+        os.replace(tmp, CONFIG)
+        return {'locale': locale}
 
     async def set_target(self, name: str):
         if not isinstance(name, str) or name not in [t['name'] for t in _targets()[0]]:
-            raise ValueError('Select a valid Taildrop target from the list.')
+            raise ValueError('targetInvalid')
         cfg = _load_config()
         cfg['target'] = name.strip()
         STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -132,37 +145,37 @@ class Plugin:
         try:
             return json.loads(STATE.read_text())
         except (OSError, ValueError):
-            return {'stage': 'idle', 'percent': 0, 'message': 'Ready'}
+            return {'stage': 'idle', 'percent': 0, 'code': 'ready', 'message': 'Ready'}
 
     async def send_clip(self, clip_id: str):
         item = candidates().get(clip_id)
         if not item:
-            raise ValueError('File not found. Refresh the file list.')
+            raise ValueError('fileMissing')
         return await self._start(item)
 
     async def send_file(self, file_path: str):
         path = Path(file_path).resolve()
         if not path.is_relative_to(HOME) or path.suffix.lower() != '.mp4' or not path.is_file():
-            raise ValueError('Only MP4 files in the Deck user directory are supported.')
+            raise ValueError('fileInvalid')
         if path.stat().st_size > 20 * 1024**3:
-            raise ValueError('File exceeds the 20 GB limit.')
+            raise ValueError('fileTooLarge')
         return await self._start({'path': str(path), 'kind': 'MP4', 'label': path.name})
 
     async def _start(self, item):
         current = await self.get_progress()
         if current.get('stage') in ('queued', 'converting', 'sending') and time.time() - current.get('updated', 0) < 120:
-            raise RuntimeError('A transfer is already running.')
+            raise RuntimeError('busy')
         target = _load_config().get('target', DEFAULT_TARGET)
         if not target:
-            raise ValueError('Choose a Taildrop target first.')
-        targets, diagnostic = _targets()
-        if diagnostic:
-            raise RuntimeError(diagnostic)
+            raise ValueError('noTarget')
+        targets, diagnostic_code, diagnostic_detail = _targets()
+        if diagnostic_code:
+            raise RuntimeError(diagnostic_code + (': ' + diagnostic_detail if diagnostic_detail else ''))
         if target not in [t['name'] for t in targets]:
-            raise ValueError('Saved target is unavailable. Select another device.')
+            raise ValueError('targetUnavailable')
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         job = str(time.time_ns())
-        initial = {'job': job, 'stage': 'queued', 'percent': 0,
+        initial = {'job': job, 'stage': 'queued', 'percent': 0, 'code': 'queued',
                    'message': f'Starting transfer to {target}…', 'file': item['label'],
                    'target': target, 'updated': time.time()}
         tmp = STATE.with_suffix('.tmp')

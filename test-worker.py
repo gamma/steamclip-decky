@@ -27,5 +27,5 @@ with tempfile.TemporaryDirectory() as d:
     w.subprocess.Popen = fake
     w.transfer(f, 'test', 'test-target')
     p = json.loads(w.STATUS.read_text())
-    assert p['stage'] == 'done' and p['percent'] == 100, p
+    assert p['stage'] == 'done' and p['code'] == 'sent' and p['target'] == 'test-target' and p['percent'] == 100, p
     print('worker progress parser: OK')

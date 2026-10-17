@@ -20,7 +20,8 @@ PERCENT = re.compile(r'(\d+(?:\.\d+)?)%')
 
 
 def update(job, stage, percent, message, **extra):
-    data = {'job': job, 'stage': stage, 'percent': round(float(percent), 1),
+    data = {'job': job, 'stage': stage, 'code': extra.pop('code', stage),
+            'percent': round(float(percent), 1),
             'message': message, 'updated': time.time(), **extra}
     tmp = BASE / f'progress.{os.getpid()}.tmp'
     tmp.write_text(json.dumps(data, ensure_ascii=False))
@@ -29,7 +30,7 @@ def update(job, stage, percent, message, **extra):
 
 def transfer(path, job, target):
     size = path.stat().st_size
-    update(job, 'sending', 0, 'Connecting via Tailscale…', file=path.name, size=size)
+    update(job, 'sending', 0, 'Connecting via Tailscale…', file=path.name, size=size, code='connecting', target=target)
     master, slave = pty.openpty()
     cmd = [TAILSCALE, 'file', 'cp', '--update-interval=1s', str(path), target + ':']
     with subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=slave,
@@ -65,10 +66,12 @@ def transfer(path, job, target):
                             label = f'{match.group(1)}% transferred'
                             if eta:
                                 label += ' · '+eta.group()
-                            update(job, 'sending', pct, label, file=path.name, size=size)
+                            update(job, 'sending', pct, label, file=path.name, size=size,
+                                   code='transferred', eta=(' · ' + eta.group()) if eta else '', target=target)
                             last = time.monotonic()
                         elif 'warning' in line.lower():
-                            update(job, 'sending', 0, line[:200], file=path.name, size=size)
+                            update(job, 'sending', 0, line[:200], file=path.name, size=size,
+                                   code='connecting', target=target)
                     buffer = re.split(r'[\r\n]+', buffer)[-1][-2000:]
                 if proc.poll() is not None and not ready:
                     break
@@ -79,7 +82,8 @@ def transfer(path, job, target):
         code = proc.wait(timeout=5)
         if code:
             raise RuntimeError(f'Taildrop exited with status {code}. See transfer.log.')
-    update(job, 'done', 100, f'MP4 sent to {target}', file=path.name, size=size)
+    update(job, 'done', 100, f'MP4 sent to {target}', file=path.name, size=size,
+           code='sent', target=target)
 
 
 def main():
@@ -91,7 +95,7 @@ def main():
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            update(job, 'error', 0, 'Another clip is already transferring.')
+            update(job, 'error', 0, 'Another clip is already transferring.', code='workerBusy')
             return
         try:
             if not source.is_file():
@@ -101,7 +105,7 @@ def main():
                 out = HOME / 'Videos/Steam-Clips' / (name + '.mp4')
                 out.parent.mkdir(parents=True, exist_ok=True)
                 if not out.exists() or source.stat().st_mtime > out.stat().st_mtime:
-                    update(job, 'converting', 0, 'Creating MP4 without re-encoding…', file=out.name)
+                    update(job, 'converting', 0, 'Creating MP4 without re-encoding…', file=out.name, code='converting')
                     tmp = out.with_suffix('.part.mp4')
                     if tmp.exists(): tmp.unlink()
                     cmd = ['ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error',
@@ -118,7 +122,13 @@ def main():
                 raise ValueError('Unknown file type.')
             transfer(source, job, target)
         except Exception as exc:
-            update(job, 'error', 0, str(exc)[:220], file=source.name)
+            code = ('clipMissing' if isinstance(exc, FileNotFoundError) else
+                    'transferTimedOut' if isinstance(exc, TimeoutError) else
+                    'mp4Empty' if str(exc) == 'MP4 export is empty.' else
+                    'unknownFile' if isinstance(exc, ValueError) else
+                    'transferFailed' if isinstance(exc, RuntimeError) else 'error')
+            update(job, 'error', 0, str(exc)[:220], file=source.name,
+                   code=code, detail=str(exc)[:220])
             raise
 
 if __name__ == '__main__':

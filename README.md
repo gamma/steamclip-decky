@@ -5,7 +5,7 @@ Decky Loader plugin for sending Steam Game Recording clips or existing MP4 files
 ## Requirements (on the Steam Deck)
 
 - Decky Loader and `ffmpeg` (included with SteamOS).
-- A separately installed **Tailscale CLI and running `tailscaled` service**. SteamOS does not ship Tailscale. Follow the [Tailscale's Steam Deck article](https://tailscale.com/blog/steam-deck) or your own SteamOS-compatible installation. The plugin finds `tailscale` on `PATH`, `/opt/tailscale/tailscale` or `/usr/local/bin/tailscale`.
+- A separately installed **Tailscale CLI and running `tailscaled` service**. SteamOS does not ship Tailscale. Follow the step-by-step guide in **[English](docs/tailscale-setup.md) / [Deutsch](docs/tailscale-einrichtung.md)**. The plugin finds `tailscale` on `PATH`, `/opt/tailscale/tailscale` or `/usr/local/bin/tailscale`.
 - Log in on the Deck **and on the destination device with the same Tailscale account**. In the [Tailscale admin console](https://login.tailscale.com/admin/settings/general), enable **Send Files / Taildrop** for your tailnet. Keep Tailscale active on the receiver.
 - Check availability on the Deck before opening the plugin: `tailscale status` and `tailscale file cp --targets`. If `--targets` prints no devices, the plugin cannot offer a target. Tagged devices, other users' devices and the Deck itself are not eligible Taildrop targets.
 
@@ -26,6 +26,7 @@ Use Node.js 20+ and pnpm 9 (the same major version as the Decky store builder):
 pnpm i --frozen-lockfile
 pnpm run build
 pnpm run smoke
+python3 test-backend.py
 python3 test-worker.py
 ```
 
@@ -38,5 +39,5 @@ The Decky store builder copies the plugin's root files, including `worker.py`, t
 - `tailscale file cp --targets` provides eligible target names and online/offline state. A missing command or nonzero exit code is reported to the user; a successful but empty list comes with Taildrop setup guidance.
 - `tailscale file cp` displays progress only when stderr is a terminal. The worker uses a PTY, parses its human-readable percentage/ETA lines, and waits for **exit status 0** before reporting success. Because the output is not a stable machine API, the intermediate bar may stop updating after future Tailscale CLI changes; the exit status still determines success/failure.
 - `ffmpeg` conversion is a remux of Steam's `session.mpd` and may not perfectly preserve a user-selected clip trim if Steam's format changes. If you need an exact trim, export the MP4 in Steam first and choose that file.
-- The frontend is in English so it is usable for Decky reviewers and international users. Contributions for localized translations are welcome.
+- The frontend has **German and English** translations in `src/i18n.ts`. It starts in the device language (German if `navigator.language` begins with `de`, otherwise English), provides a language selector, and saves manual selection in the local `config.json`. Status messages from the backend/worker use language-neutral codes so changing language also updates in-progress messages. `pnpm run smoke` checks key/placeholder parity.
 - This project was developed with substantial generative-AI assistance; this was explicitly disclosed in the [Decky store PR](https://github.com/SteamDeckHomebrew/decky-plugin-database/pull/1150).
