@@ -1,11 +1,11 @@
-import { ButtonItem, Dropdown, PanelSection, PanelSectionRow, staticClasses } from '@decky/ui';
+import { ButtonItem, Dropdown, PanelSection, PanelSectionRow } from '@decky/ui';
 import { callable, definePlugin } from '@decky/api';
 import { useEffect, useState } from 'react';
 import { FaVideo } from 'react-icons/fa';
 
 type Clip = { id: string; kind: string; label: string; size: number; size_label: string };
 type Target = { name: string; online: boolean; detail: string };
-type Config = { target: string; targets: Target[] };
+type Config = { target: string; targets: Target[]; diagnostic: string };
 type Progress = { stage: string; percent: number; message: string; file?: string };
 const listClips = callable<[], Clip[]>('list_clips');
 const getConfig = callable<[], Config>('get_config');
@@ -18,8 +18,9 @@ function Content() {
   const [targets, setTargets] = useState<Target[]>([]);
   const [target, setTargetName] = useState('');
   const [selected, setSelected] = useState('');
-  const [progress, setProgress] = useState<Progress>({ stage: 'idle', percent: 0, message: 'Bereit' });
+  const [progress, setProgress] = useState<Progress>({ stage: 'idle', percent: 0, message: 'Ready' });
   const [error, setError] = useState('');
+  const [diagnostic, setDiagnostic] = useState('');
 
   const refresh = async () => {
     try {
@@ -28,6 +29,7 @@ function Content() {
       setSelected(old => found.some(c => c.id === old) ? old : (found[0]?.id ?? ''));
       setTargets(cfg.targets);
       setTargetName(cfg.target);
+      setDiagnostic(cfg.diagnostic || '');
       setError('');
     } catch (e) { setError(String(e)); }
   };
@@ -43,7 +45,7 @@ function Content() {
     const progressTimer = window.setInterval(() => void tick(), 1000);
     const targetTimer = window.setInterval(() => {
       void listClips().then(setClips).catch(() => {});
-      void getConfig().then(cfg => setTargets(cfg.targets)).catch(() => {});
+      void getConfig().then(cfg => { setTargets(cfg.targets); setDiagnostic(cfg.diagnostic || ''); }).catch(() => {});
     }, 15000);
     return () => { mounted = false; window.clearInterval(progressTimer); window.clearInterval(targetTimer); };
   }, []);
@@ -62,8 +64,8 @@ function Content() {
   return <PanelSection title="SteamClip">
     <PanelSectionRow>
       <Dropdown
-        menuLabel="Zielgerät wählen"
-        strDefaultLabel="Zielgerät"
+        menuLabel="Target device"
+        strDefaultLabel="Choose target"
         rgOptions={targets.map(t => ({ data: t.name, label: `${t.online ? '●' : '○'} ${t.name}${t.online ? '' : ' (offline)'}` }))}
         selectedOption={target}
         onChange={item => void changeTarget(item.data)}
@@ -72,16 +74,16 @@ function Content() {
     </PanelSectionRow>
     <PanelSectionRow>
       <Dropdown
-        menuLabel="Clip oder MP4 wählen"
-        strDefaultLabel="Clip wählen"
+        menuLabel="Choose clip or MP4"
+        strDefaultLabel="Choose clip"
         rgOptions={clips.map(c => ({ data: c.id, label: c.label }))}
         selectedOption={selected}
         onChange={item => setSelected(item.data)}
         disabled={busy}
       />
     </PanelSectionRow>
-    <PanelSectionRow><ButtonItem layout="below" onClick={() => void refresh()} disabled={busy}>Dateiliste aktualisieren</ButtonItem></PanelSectionRow>
-    <PanelSectionRow><ButtonItem layout="below" onClick={() => void sendClipSel()} disabled={!selected || !target || busy}>Clip als MP4 senden</ButtonItem></PanelSectionRow>
+    <PanelSectionRow><ButtonItem layout="below" onClick={() => void refresh()} disabled={busy}>Refresh files & devices</ButtonItem></PanelSectionRow>
+    <PanelSectionRow><ButtonItem layout="below" onClick={() => void sendClipSel()} disabled={!selected || !target || !!diagnostic || busy}>Send clip as MP4</ButtonItem></PanelSectionRow>
     <PanelSectionRow>
       <div style={{ width: '100%', fontSize: 'small' }}>
         <div>{progress.file || ''}</div>
@@ -89,8 +91,9 @@ function Content() {
           <div style={{ width: `${value}%`, background: progress.stage === 'error' ? '#cf5656' : '#69a9ea', height: '100%', transition: 'width .5s' }} />
         </div>
         <div style={{ marginTop: 5 }}>{progress.message} {progress.stage === 'sending' ? `(${value.toFixed(1)} %)` : ''}</div>
-        {!target && <div style={{ color: '#e0b25a' }}>Bitte zuerst ein Zielgerät wählen.</div>}
-        {!clips.length && <div>Kein gespeicherter Clip gefunden. In Steam zuerst einen Clip speichern.</div>}
+        {!target && !diagnostic && <div style={{ color: '#e0b25a' }}>Choose a target device first.</div>}
+        {diagnostic && <div style={{ color: '#e0b25a' }}>{diagnostic}</div>}
+        {!clips.length && <div>No saved clips found. Save a clip in Steam first.</div>}
         {error && <div style={{ color: '#e27b7b' }}>{error}</div>}
       </div>
     </PanelSectionRow>
@@ -98,7 +101,7 @@ function Content() {
 }
 export default definePlugin(() => ({
   name: 'SteamClip',
-  titleView: <div className={staticClasses.Title}>SteamClip</div>,
+  titleView: <div>SteamClip</div>,
   content: <Content />,
   icon: <FaVideo />,
 }));

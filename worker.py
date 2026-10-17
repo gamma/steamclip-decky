@@ -11,7 +11,8 @@ import subprocess
 import sys
 import time
 
-HOME = Path('/home/deck')
+HOME = Path(os.environ.get('STEAMCLIP_HOME') or Path.home())
+TAILSCALE = os.environ.get('STEAMCLIP_TAILSCALE') or '/opt/tailscale/tailscale'
 BASE = HOME / '.local/state/steamclip-taildrop'
 STATUS = BASE / 'progress.json'
 ANSI = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
@@ -28,9 +29,9 @@ def update(job, stage, percent, message, **extra):
 
 def transfer(path, job, target):
     size = path.stat().st_size
-    update(job, 'sending', 0, 'Verbinde per Tailscale …', file=path.name, size=size)
+    update(job, 'sending', 0, 'Connecting via Tailscale…', file=path.name, size=size)
     master, slave = pty.openpty()
-    cmd = ['/opt/tailscale/tailscale', 'file', 'cp', '--update-interval=1s', str(path), target + ':']
+    cmd = [TAILSCALE, 'file', 'cp', '--update-interval=1s', str(path), target + ':']
     with subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=slave,
                           stderr=slave, close_fds=True, start_new_session=True) as proc:
         os.close(slave)
@@ -61,7 +62,7 @@ def transfer(path, job, target):
                         if match:
                             pct = min(99.9, float(match.group(1)))
                             eta = re.search(r'ETA\s+\S+', line)
-                            label = f'{match.group(1)} % übertragen'
+                            label = f'{match.group(1)}% transferred'
                             if eta:
                                 label += ' · '+eta.group()
                             update(job, 'sending', pct, label, file=path.name, size=size)
@@ -73,12 +74,12 @@ def transfer(path, job, target):
                     break
                 if time.monotonic() > deadline:
                     proc.kill()
-                    raise TimeoutError('Übertragung nach 30 Minuten abgebrochen.')
+                    raise TimeoutError('Transfer timed out after 30 minutes.')
         os.close(master)
         code = proc.wait(timeout=5)
         if code:
-            raise RuntimeError(f'Taildrop meldet Fehler {code}; Details in transfer.log.')
-    update(job, 'done', 100, f'MP4 an {target} gesendet', file=path.name, size=size)
+            raise RuntimeError(f'Taildrop exited with status {code}. See transfer.log.')
+    update(job, 'done', 100, f'MP4 sent to {target}', file=path.name, size=size)
 
 
 def main():
@@ -90,17 +91,17 @@ def main():
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            update(job, 'error', 0, 'Ein anderer Clip wird bereits übertragen.')
+            update(job, 'error', 0, 'Another clip is already transferring.')
             return
         try:
             if not source.is_file():
-                raise FileNotFoundError('Ausgewählter Clip fehlt.')
+                raise FileNotFoundError('Selected clip no longer exists.')
             if kind == 'Steam-Clip':
                 name = source.parents[2].name
                 out = HOME / 'Videos/Steam-Clips' / (name + '.mp4')
                 out.parent.mkdir(parents=True, exist_ok=True)
                 if not out.exists() or source.stat().st_mtime > out.stat().st_mtime:
-                    update(job, 'converting', 0, 'Erstelle MP4 ohne Qualitätsverlust …', file=out.name)
+                    update(job, 'converting', 0, 'Creating MP4 without re-encoding…', file=out.name)
                     tmp = out.with_suffix('.part.mp4')
                     if tmp.exists(): tmp.unlink()
                     cmd = ['ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error',
@@ -110,11 +111,11 @@ def main():
                         subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT,
                                        check=True, timeout=3600)
                     if not tmp.is_file() or not tmp.stat().st_size:
-                        raise RuntimeError('MP4-Export leer.')
+                        raise RuntimeError('MP4 export is empty.')
                     os.replace(tmp, out)
                 source = out
             elif kind != 'MP4':
-                raise ValueError('Unbekannter Dateityp.')
+                raise ValueError('Unknown file type.')
             transfer(source, job, target)
         except Exception as exc:
             update(job, 'error', 0, str(exc)[:220], file=source.name)

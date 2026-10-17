@@ -1,75 +1,42 @@
 # SteamClip
 
-Decky-Loader-Plugin für das Steam Deck: **Steam-Clips als MP4 an ein beliebiges
-Tailscale-Gerät senden** – direkt aus dem Gaming-Modus über die ⋯-Sidebar.
+Decky Loader plugin for sending Steam Game Recording clips or existing MP4 files to **any eligible Tailscale device** from Game Mode. Pick a clip and target, then follow the transfer progress in the sidebar.
 
-## Funktionen
+## Requirements (on the Steam Deck)
 
-- **Dateiauswahl**: neueste gespeicherte Steam-Clips (`session.mpd`) und vorhandene
-  MP4-Dateien aus `Videos`/`Downloads`, inklusive Dateigröße.
-- **Zielgerät-Auswahl**: Liste aller Taildrop-fähigen Tailscale-Geräte mit
-  Online-Status (● online / ○ offline). Die Auswahl wird gespeichert.
-- **Echter Fortschritt**: Prozent + ETA, ausgelesen aus `tailscale file cp`.
-- **Verlustfreies MP4**: Steam-Clips werden per `ffmpeg -c copy` remuxt
-  (keine Neukodierung), MP4-Dateien werden unverändert gesendet.
+- Decky Loader and `ffmpeg` (included with SteamOS).
+- A separately installed **Tailscale CLI and running `tailscaled` service**. SteamOS does not ship Tailscale. Follow the [Tailscale's Steam Deck article](https://tailscale.com/blog/steam-deck) or your own SteamOS-compatible installation. The plugin finds `tailscale` on `PATH`, `/opt/tailscale/tailscale` or `/usr/local/bin/tailscale`.
+- Log in on the Deck **and on the destination device with the same Tailscale account**. In the [Tailscale admin console](https://login.tailscale.com/admin/settings/general), enable **Send Files / Taildrop** for your tailnet. Keep Tailscale active on the receiver.
+- Check availability on the Deck before opening the plugin: `tailscale status` and `tailscale file cp --targets`. If `--targets` prints no devices, the plugin cannot offer a target. Tagged devices, other users' devices and the Deck itself are not eligible Taildrop targets.
 
-## Aufbau
+The plugin never installs Tailscale, asks for credentials, or enables Taildrop automatically. If the CLI is missing, not logged in, or Taildrop is disabled, the sidebar displays an explanation rather than an empty, unexplained picker.
 
-| Datei | Zweck |
-| --- | --- |
-| `main.py` | Decky-Backend: `list_clips`, `list_targets`, `get_config`, `set_target`, `get_progress`, `send_clip`, `send_file` |
-| `worker.py` | Hintergrund-Job: ffmpeg-Remux + `tailscale file cp` in PTY, schreibt `progress.json` |
-| `src/index.tsx` | React-Frontend (Auswahllisten, Fortschrittsbalken, Polling) |
-| `shims/` | Map `@decky/ui`/`react`/`react/jsx-runtime` auf Deckys injizierte Globals (`DFL`, `SP_REACT`, `SP_JSX`) |
+## Features
 
-Der Fortschritt (`worker.py`) wird unter
-`~/.local/state/steamclip-taildrop/` abgelegt: `progress.json`,
-`transfer.log`, `worker.log`, `ffmpeg.log`, `config.json` (gespeichertes
-Zielgerät).
+- Lists saved Steam clips (`session.mpd`) plus MP4 files in `~/Videos` and `~/Downloads`, newest first, **with file sizes**.
+- Lists Taildrop-capable destinations with online/offline indication and saves the selected target in a local config file.
+- Losslessly remuxes Steam clips to MP4 using `ffmpeg -c copy`; existing MP4s are sent unchanged.
+- Shows percentage and ETA from the `tailscale file cp` terminal progress output, plus completion or error status.
 
-## Bauen
+## Build and install
 
-```bash
-npm install
-npm run build     # erzeugt dist/index.js (ES-Modul)
-npm run smoke     # optionaler Frontend-Smoke-Test in Node
+Use Node.js 20+ and pnpm 9 (the same major version as the Decky store builder):
+
+```sh
+pnpm i --frozen-lockfile
+pnpm run build
+pnpm run smoke
+python3 test-worker.py
 ```
 
-Der Build nutzt **esbuild** (statt Rollup), damit er auch auf ARM64/iSH läuft.
-`@decky/ui`, `react` und `react/jsx-runtime` werden auf Deckys Globals gemappt
-(dasselbe wie `@decky/rollup` mit `externalGlobals`); `@decky/api` und
-`react-icons` werden gebündelt.
+The Decky store builder copies the plugin's root files, including `worker.py`, to the installed plugin directory. **No separate worker installation is required.** If manually installing, copy `main.py`, `worker.py`, `plugin.json`, `package.json` and `dist/index.js` into one plugin directory under `~/homebrew/plugins/`. `package.json` must include `"type": "module"` to load `dist/index.js` as an ES module. Install and restart Decky via its supported procedures.
 
-## Installieren
+`main.py` starts the **bundled** `worker.py` from `DECKY_PLUGIN_DIR`/the directory containing `main.py`. The background worker uses the Deck user home from `DECKY_USER_HOME`. State and logs live under `~/.local/state/steamclip-taildrop/` (`config.json`, `progress.json`, `worker.log`, `transfer.log`, `ffmpeg.log`). The selected Taildrop device is local-only and is not embedded in the repository.
 
-1. **`package.json` muss `"type": "module"` enthalten** – sonst lädt Decky das
-   Bundle als `LEGACY_EVAL_IIFE` und bricht mit
-   `SyntaxError: Unexpected token 'export'` ab.
-2. Plugin-Ordner als ZIP packen und per Decky-Loader installieren, oder den
-   Ordner nach `/home/deck/homebrew/plugins/` kopieren:
-   - `main.py`, `plugin.json`, `package.json`, `dist/index.js`
-3. `worker.py` nach `/home/deck/.local/bin/steamclip-worker.py` kopieren
-   (`chmod 700`). `main.py` startet ihn als `/usr/bin/python3`.
-4. Voraussetzungen auf dem Deck: **Decky Loader**, **Tailscale**
-   (`/opt/tailscale/tailscale`) und **ffmpeg** (`/usr/bin/ffmpeg`, bei SteamOS
-   vorhanden). Taildrop muss im Tailnet aktiviert sein.
+## Implementation notes
 
-## Ablauf beim Senden
-
-1. `send_clip`/`send_file` legt `progress.json` mit `stage: queued` an und
-   startet `worker.py` als abgekoppelten Hintergrundprozess.
-2. Der Worker remuxt bei Steam-Clips nach `~/Videos/Steam-Clips/<clip>.mp4`,
-   sendet dann `tailscale file cp --update-interval=1s <datei> <ziel>:` in einem
-   PTY und parst die `%`/`ETA`-Zeilen.
-3. Das Frontend pollt `get_progress` im 1-Sekunden-Takt und zeigt den Balken.
-
-## Hinweise
-
-- `tailscale file cp --targets` liefert die gültigen Taildrop-Ziele; getaggte
-  Nodes und das eigene Gerät werden dadurch automatisch ausgeschlossen.
-- Die Prozentanzeige basiert auf der PTY-Ausgabe der Tailscale-CLI und ist
-  damit versionsabhängig. Fällt sie aus, schlägt der Versand trotzdem fehl —
-  der Balken springt dann von „Verbinde …“ auf „gesendet“ (Exitcode 0).
-- `plugin_loader.service` startet nur beim Boot mit Root-Rechten; ohne Root
-  kann der Dienst vorübergehend als Benutzerdienst gestartet werden
-  (`systemd-run --user --unit=decky-recovery … PluginLoader`).
+- `tailscale file cp --targets` provides eligible target names and online/offline state. A missing command or nonzero exit code is reported to the user; a successful but empty list comes with Taildrop setup guidance.
+- `tailscale file cp` displays progress only when stderr is a terminal. The worker uses a PTY, parses its human-readable percentage/ETA lines, and waits for **exit status 0** before reporting success. Because the output is not a stable machine API, the intermediate bar may stop updating after future Tailscale CLI changes; the exit status still determines success/failure.
+- `ffmpeg` conversion is a remux of Steam's `session.mpd` and may not perfectly preserve a user-selected clip trim if Steam's format changes. If you need an exact trim, export the MP4 in Steam first and choose that file.
+- The frontend is in English so it is usable for Decky reviewers and international users. Contributions for localized translations are welcome.
+- This project was developed with substantial generative-AI assistance; this was explicitly disclosed in the [Decky store PR](https://github.com/SteamDeckHomebrew/decky-plugin-database/pull/1150).
